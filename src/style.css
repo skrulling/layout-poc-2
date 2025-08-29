@@ -293,10 +293,10 @@ body {
 }
 
 .tab-button.active {
-    background-color: #007bff;
+    background-color: #6f42c1;
     color: white;
-    border-color: #007bff;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    border-color: #6f42c1;
+    box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
 }
 
 .demo-panel {
@@ -457,13 +457,13 @@ body {
 }
 
 .btn-warning {
-    background-color: #ffc107;
-    color: #212529;
+    background-color: #fd7e14;
+    color: white;
 }
 
 .btn-warning:hover {
-    background-color: #e0a800;
-    color: #212529;
+    background-color: #e8650e;
+    color: white;
 }
 
 .btn-toggle {
@@ -873,6 +873,39 @@ body {
     display: block;
     width: 100%;
     margin-bottom: 10px;
+}
+
+.btn-chart {
+    background-color: #007bff !important;
+    color: white !important;
+    border: 2px solid #007bff !important;
+}
+
+.btn-chart:hover {
+    background-color: #0056b3 !important;
+    border-color: #0056b3 !important;
+}
+
+.btn-kpi {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+    border: 2px solid #ffc107 !important;
+}
+
+.btn-kpi:hover {
+    background-color: #e0a800 !important;
+    border-color: #e0a800 !important;
+}
+
+.btn-add-component {
+    background-color: #28a745 !important;
+    color: white !important;
+    border: 2px solid #28a745 !important;
+}
+
+.btn-add-component:hover {
+    background-color: #218838 !important;
+    border-color: #218838 !important;
 }
 
 .import-modal-content {

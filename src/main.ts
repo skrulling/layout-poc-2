@@ -61,8 +61,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="component-modal" class="modal">
     <div class="modal-content">
       <h3>Select Component Type</h3>
-      <button id="add-chart" class="btn">Chart (6x6)</button>
-      <button id="add-kpi" class="btn">KPI (2x3)</button>
+      <button id="add-chart" class="btn btn-chart">Chart (6x6)</button>
+      <button id="add-kpi" class="btn btn-kpi">KPI (2x3)</button>
       <button id="modal-close" class="btn btn-secondary">Cancel</button>
     </div>
   </div>
@@ -141,14 +141,14 @@ function updateCanvasControls(demoId: string) {
   
   if (demoId === 'demo1') {
     canvasControls.innerHTML = `
-      <button id="add-component-btn-1" class="btn">Add Component</button>
+      <button id="add-component-btn-1" class="btn btn-add-component">Add Component</button>
       <button id="clear-canvas-btn-1" class="btn btn-warning">Clear Canvas</button>
       <button id="export-layout-btn-1" class="btn btn-secondary">Export Layout</button>
       <button id="import-layout-btn-1" class="btn btn-secondary">Import Layout</button>
     `;
   } else if (demoId === 'demo2') {
     canvasControls.innerHTML = `
-      <button id="add-component-btn-2" class="btn">Add Component</button>
+      <button id="add-component-btn-2" class="btn btn-add-component">Add Component</button>
       <button id="clear-canvas-btn-2" class="btn btn-warning">Clear Canvas</button>
       <button id="export-layout-btn-2" class="btn btn-secondary">Export Layout</button>
       <button id="import-layout-btn-2" class="btn btn-secondary">Import Layout</button>
@@ -188,16 +188,20 @@ function switchDemo(demoId: string) {
   });
   document.querySelector(`[data-demo="${demoId}"]`)!.classList.add('active');
   
+  // Update current demo first
+  currentDemo = demoId;
+  
+  // Reinitialize modal for current demo
+  initializeModal();
+  
   // Update canvas controls
   updateCanvasControls(demoId);
-  
-  currentDemo = demoId;
 }
 
 // Attach event listeners for each demo
 function attachDemoEventListeners(demoId: string) {
   if (demoId === 'demo1') {
-    document.getElementById('add-component-btn-1')?.addEventListener('click', () => modals['demo1'].show());
+    document.getElementById('add-component-btn-1')?.addEventListener('click', () => componentModal.show());
     document.getElementById('clear-canvas-btn-1')?.addEventListener('click', () => {
       if (confirm('Are you sure you want to clear the canvas?')) {
         layoutEngines['demo1'].clearCanvas();
@@ -213,7 +217,7 @@ function attachDemoEventListeners(demoId: string) {
       layoutEngines['demo1'].importLayout(savedState);
     }
   } else if (demoId === 'demo2') {
-    document.getElementById('add-component-btn-2')?.addEventListener('click', () => modals['demo2'].show());
+    document.getElementById('add-component-btn-2')?.addEventListener('click', () => componentModal.show());
     document.getElementById('clear-canvas-btn-2')?.addEventListener('click', () => {
       if (confirm('Are you sure you want to clear the canvas?')) {
         layoutEngines['demo2'].clearCanvas();
@@ -394,19 +398,28 @@ layoutEngines['demo2'] = new LayoutEngine('canvas-2');
 layoutEngines['demo2'].setReflowEnabled(false);
 setupAutoSave('demo2', layoutEngines['demo2']);
 
-// Initialize modals
-modals['demo1'] = new Modal(
-  'component-modal',
-  () => layoutEngines['demo1'].addComponent('chart'),
-  () => layoutEngines['demo1'].addComponent('kpi')
-);
-modals['demo2'] = new Modal(
-  'component-modal',
-  () => layoutEngines['demo2'].addComponent('chart'),
-  () => layoutEngines['demo2'].addComponent('kpi')
-);
+// Initialize single modal that works with current demo
+let componentModal: Modal;
 
-// Initialize with demo1
+function initializeModal() {
+  if (!componentModal) {
+    // Create modal only once
+    componentModal = new Modal(
+      'component-modal',
+      () => layoutEngines[currentDemo].addComponent('chart'),
+      () => layoutEngines[currentDemo].addComponent('kpi')
+    );
+  } else {
+    // Update callbacks for current demo
+    componentModal.updateCallbacks(
+      () => layoutEngines[currentDemo].addComponent('chart'),
+      () => layoutEngines[currentDemo].addComponent('kpi')
+    );
+  }
+}
+
+// Initialize modal and start with demo1
+initializeModal();
 switchDemo('demo1');
 
 // Tab event listeners
