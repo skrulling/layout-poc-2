@@ -1,5 +1,5 @@
 import { Component, ChartComponent, KPIComponent } from './components'
-import { Position, Size, ComponentType, ComponentState, LayoutState } from './types'
+import { Position, Size, ComponentType, ComponentState, LayoutState, GridPosition } from './types'
 
 export class LayoutEngine {
     private canvas: HTMLElement;
@@ -7,6 +7,22 @@ export class LayoutEngine {
     private nextId = 1;
     private draggedComponent: Component | null = null;
     private resizeComponent: Component | null = null;
+    private resizeDirection: string | null = null;
+    private resizeStartPosition: Position = { x: 0, y: 0 };
+    private resizeStartSize: { width: number, height: number, col: number, row: number } = { width: 0, height: 0, col: 0, row: 0 };
+    private smoothDragPosition: Position = { x: 0, y: 0 };
+    private targetGridPosition: Position = { x: 0, y: 0 };
+    private smoothResizeSize: { width: number, height: number } = { width: 0, height: 0 };
+    private targetResizeSize: { width: number, height: number } = { width: 0, height: 0 };
+    private animationFrame: number | null = null;
+    private magneticStrength: number = 0.12; // Lower = more resistance
+    private snapThreshold: number = 0.6; // When to snap to next grid position (higher = less sensitive)
+    private ghostElement: HTMLElement | null = null;
+    private rawCursorPosition: Position = { x: 0, y: 0 };
+    private magneticGhostThreshold: number = 0.1; // How close to snap zone before ghost sticks
+    private targetResizePosition: Position = { x: 0, y: 0 };
+    private rawResizeSize: { width: number, height: number } = { width: 0, height: 0 };
+    private rawResizePosition: Position = { x: 0, y: 0 };
     private dragOffset: Position = { x: 0, y: 0 };
     private previewElement: HTMLElement | null = null;
     private reflowEnabled = true;
@@ -356,15 +372,41 @@ export class LayoutEngine {
     
     private setupComponentEvents(component: Component): void {
         const element = component.element;
-        const resizeHandle = element.querySelector('.resize-handle') as HTMLElement;
+        const resizeHandles = element.querySelectorAll('.resize-handle');
+        const deleteButton = element.querySelector('.delete-button');
         
         element.addEventListener('mousedown', (e) => {
-            if (e.target === resizeHandle) {
-                this.startResize(component, e);
-            } else {
+            const target = e.target as HTMLElement;
+            if (target && target.classList.contains('delete-button')) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.deleteComponent(component);
+            } else if (target && target.classList.contains('resize-handle')) {
+                const direction = target.getAttribute('data-direction');
+                this.startResize(component, e, direction);
+            } else if (!target.classList.contains('resize-handle') && !target.classList.contains('delete-button')) {
                 this.startDrag(component, e);
             }
         });
+        
+        // Add hover effects for resize handles
+        resizeHandles.forEach(handle => {
+            handle.addEventListener('mouseenter', () => {
+                handle.classList.add('active');
+            });
+            handle.addEventListener('mouseleave', () => {
+                handle.classList.remove('active');
+            });
+        });
+        
+        // Add delete button click handler
+        if (deleteButton) {
+            deleteButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.deleteComponent(component);
+            });
+        }
     }
     
     private startDrag(component: Component, e: MouseEvent): void {
@@ -378,21 +420,68 @@ export class LayoutEngine {
             y: e.clientY - rect.top
         };
         
+        // Initialize smooth drag position to current grid position
+        this.smoothDragPosition = {
+            x: component.position.col,
+            y: component.position.row
+        };
+        
+        this.targetGridPosition = {
+            x: component.position.col,
+            y: component.position.row
+        };
+        
+        // Initialize raw cursor position to current position
+        this.rawCursorPosition = {
+            x: component.position.col,
+            y: component.position.row
+        };
+        
         this.createPreview();
+        this.startSmoothAnimation();
     }
     
-    private startResize(component: Component, e: MouseEvent): void {
+    private startResize(component: Component, e: MouseEvent, direction: string | null): void {
         e.preventDefault();
         e.stopPropagation();
         this.resizeComponent = component;
+        this.resizeDirection = direction;
+        this.resizeStartPosition = { x: e.clientX, y: e.clientY };
+        this.resizeStartSize = {
+            width: component.position.width,
+            height: component.position.height,
+            col: component.position.col,
+            row: component.position.row
+        };
+        
+        // Initialize smooth resize
+        this.smoothResizeSize = {
+            width: component.position.width,
+            height: component.position.height
+        };
+        this.targetResizeSize = {
+            width: component.position.width,
+            height: component.position.height
+        };
+        this.targetResizePosition = {
+            x: component.position.col,
+            y: component.position.row
+        };
+        
         component.element.classList.add('resizing');
         this.createPreview();
+        this.startSmoothAnimation();
     }
     
     private createPreview(): void {
         this.previewElement = document.createElement('div');
         this.previewElement.className = 'preview-placeholder';
         this.canvas.appendChild(this.previewElement);
+        
+        // Create ghost element for immediate visual feedback
+        this.ghostElement = document.createElement('div');
+        this.ghostElement.className = 'ghost-outline';
+        this.canvas.appendChild(this.ghostElement);
     }
     
     private updatePreview(col: number, row: number, width: number, height: number): void {
@@ -436,50 +525,9 @@ export class LayoutEngine {
             if (this.activeBorderHandle) {
                 this.handleBorderDrag(e);
             } else if (this.draggedComponent) {
-                const gridPos = this.getGridPosition(e.clientX - this.dragOffset.x, e.clientY - this.dragOffset.y);
-                const maxCol = 12 - this.draggedComponent.position.width;
-                const col = Math.max(0, Math.min(maxCol, gridPos.x));
-                const row = Math.max(0, gridPos.y);
-                
-                if (this.collisionResizeEnabled) {
-                    // Show collision resize preview
-                    this.previewCollisionResize(this.draggedComponent, col, row);
-                } else if (this.reflowEnabled) {
-                    // Show live reflow preview
-                    this.previewReflow(this.draggedComponent, col, row);
-                } else {
-                    // Just move the component without reflow
-                    this.draggedComponent.position.col = col;
-                    this.draggedComponent.position.row = row;
-                    this.draggedComponent.updateElement(this.canvas);
-                }
-                
-                // Update preview placeholder
-                this.updatePreview(col, row, this.draggedComponent.position.width, this.draggedComponent.position.height);
+                this.handleSmoothDrag(e);
             } else if (this.resizeComponent) {
-                const gridPos = this.getGridPosition(e.clientX, e.clientY);
-                const minWidth = this.getMinimumColumns(this.resizeComponent);
-                const minHeight = 1;
-                const maxWidth = 12 - this.resizeComponent.position.col;
-                
-                const width = Math.max(minWidth, Math.min(maxWidth, gridPos.x - this.resizeComponent.position.col + 1));
-                const height = Math.max(minHeight, gridPos.y - this.resizeComponent.position.row + 1);
-                
-                if (this.collisionResizeEnabled) {
-                    // Show collision resize preview with new size
-                    this.previewCollisionResize(this.resizeComponent, this.resizeComponent.position.col, this.resizeComponent.position.row, width, height);
-                } else if (this.reflowEnabled) {
-                    // Show live reflow preview with new size
-                    this.previewReflow(this.resizeComponent, this.resizeComponent.position.col, this.resizeComponent.position.row, width, height);
-                } else {
-                    // Just resize the component without reflow
-                    this.resizeComponent.position.width = width;
-                    this.resizeComponent.position.height = height;
-                    this.resizeComponent.updateElement(this.canvas);
-                }
-                
-                // Update preview placeholder
-                this.updatePreview(this.resizeComponent.position.col, this.resizeComponent.position.row, width, height);
+                this.handleSmoothResize(e);
             }
         });
         
@@ -490,16 +538,20 @@ export class LayoutEngine {
                 this.activeBorderHandle = null;
                 this.updateBorderHandles();
             } else if (this.draggedComponent) {
-                // Finalize the position (already applied during preview)
+                // Finalize the position
                 this.draggedComponent.element.classList.remove('dragging');
                 const draggedComp = this.draggedComponent;
+                
+                // Set final position to target grid position
+                draggedComp.position.col = this.targetGridPosition.x;
+                draggedComp.position.row = this.targetGridPosition.y;
+                
                 this.draggedComponent = null;
                 this.cleanupPreview();
                 
                 // Apply final behavior based on enabled modes
                 if (this.collisionResizeEnabled) {
-                    // Collision resize is already applied during preview, just finalize
-                    // No additional action needed - components are already resized
+                    this.resizeOverlappingComponents(draggedComp);
                 } else if (this.reflowEnabled) {
                     this.reflowComponents();
                 } else {
@@ -507,8 +559,8 @@ export class LayoutEngine {
                     if (this.hasCollisions(draggedComp)) {
                         // Find a safe position
                         this.findAvailablePosition(draggedComp);
-                        draggedComp.updateElement(this.canvas);
                     }
+                    draggedComp.updateElement(this.canvas);
                 }
                 
                 // Save master layout if on desktop
@@ -518,16 +570,20 @@ export class LayoutEngine {
                 
                 this.updateBorderHandles();
             } else if (this.resizeComponent) {
-                // Finalize the size (already applied during preview)
+                // Finalize the size
                 this.resizeComponent.element.classList.remove('resizing');
                 const resizedComp = this.resizeComponent;
+                
+                // Apply final dimensions and position based on resize direction
+                this.applyFinalResize(resizedComp);
+                
                 this.resizeComponent = null;
+                this.resizeDirection = null;
                 this.cleanupPreview();
                 
                 // Apply final behavior based on enabled modes
                 if (this.collisionResizeEnabled) {
-                    // Collision resize is already applied during preview, just finalize
-                    // No additional action needed - components are already resized
+                    this.resizeOverlappingComponents(resizedComp);
                 } else if (this.reflowEnabled) {
                     this.reflowComponents();
                 } else {
@@ -535,8 +591,8 @@ export class LayoutEngine {
                     if (this.hasCollisions(resizedComp)) {
                         // Find a safe size or position
                         this.findAvailablePosition(resizedComp);
-                        resizedComp.updateElement(this.canvas);
                     }
+                    resizedComp.updateElement(this.canvas);
                 }
                 
                 // Save master layout if on desktop
@@ -549,11 +605,441 @@ export class LayoutEngine {
         });
     }
     
+    private handleComponentResize(e: MouseEvent): void {
+        if (!this.resizeComponent || !this.resizeDirection) return;
+        
+        const deltaX = e.clientX - this.resizeStartPosition.x;
+        const deltaY = e.clientY - this.resizeStartPosition.y;
+        const cellSize = this.getCellSize();
+        
+        // Convert pixel deltas to grid deltas
+        const gridDeltaX = Math.round(deltaX / (cellSize.width + 8));
+        const gridDeltaY = Math.round(deltaY / (cellSize.height + 8));
+        
+        let newCol = this.resizeStartSize.col;
+        let newRow = this.resizeStartSize.row;
+        let newWidth = this.resizeStartSize.width;
+        let newHeight = this.resizeStartSize.height;
+        
+        const minWidth = this.getMinimumColumns(this.resizeComponent);
+        const minHeight = 1;
+        
+        // Calculate new dimensions based on resize direction
+        switch (this.resizeDirection) {
+            case 'north':
+                newRow = Math.max(0, this.resizeStartSize.row + gridDeltaY);
+                newHeight = Math.max(minHeight, this.resizeStartSize.height - gridDeltaY);
+                break;
+            case 'south':
+                newHeight = Math.max(minHeight, this.resizeStartSize.height + gridDeltaY);
+                break;
+            case 'east':
+                newWidth = Math.max(minWidth, Math.min(12 - this.resizeStartSize.col, this.resizeStartSize.width + gridDeltaX));
+                break;
+            case 'west':
+                newCol = Math.max(0, this.resizeStartSize.col + gridDeltaX);
+                newWidth = Math.max(minWidth, this.resizeStartSize.width - gridDeltaX);
+                // Don't let the component extend beyond the grid
+                if (newCol + newWidth > 12) {
+                    newWidth = 12 - newCol;
+                }
+                break;
+            case 'northeast':
+                newRow = Math.max(0, this.resizeStartSize.row + gridDeltaY);
+                newHeight = Math.max(minHeight, this.resizeStartSize.height - gridDeltaY);
+                newWidth = Math.max(minWidth, Math.min(12 - this.resizeStartSize.col, this.resizeStartSize.width + gridDeltaX));
+                break;
+            case 'northwest':
+                newRow = Math.max(0, this.resizeStartSize.row + gridDeltaY);
+                newHeight = Math.max(minHeight, this.resizeStartSize.height - gridDeltaY);
+                newCol = Math.max(0, this.resizeStartSize.col + gridDeltaX);
+                newWidth = Math.max(minWidth, this.resizeStartSize.width - gridDeltaX);
+                if (newCol + newWidth > 12) {
+                    newWidth = 12 - newCol;
+                }
+                break;
+            case 'southeast':
+                newHeight = Math.max(minHeight, this.resizeStartSize.height + gridDeltaY);
+                newWidth = Math.max(minWidth, Math.min(12 - this.resizeStartSize.col, this.resizeStartSize.width + gridDeltaX));
+                break;
+            case 'southwest':
+                newHeight = Math.max(minHeight, this.resizeStartSize.height + gridDeltaY);
+                newCol = Math.max(0, this.resizeStartSize.col + gridDeltaX);
+                newWidth = Math.max(minWidth, this.resizeStartSize.width - gridDeltaX);
+                if (newCol + newWidth > 12) {
+                    newWidth = 12 - newCol;
+                }
+                break;
+        }
+        
+        // Apply the resize
+        if (this.collisionResizeEnabled) {
+            this.previewCollisionResize(this.resizeComponent, newCol, newRow, newWidth, newHeight);
+        } else if (this.reflowEnabled) {
+            this.previewReflow(this.resizeComponent, newCol, newRow, newWidth, newHeight);
+        } else {
+            this.resizeComponent.position.col = newCol;
+            this.resizeComponent.position.row = newRow;
+            this.resizeComponent.position.width = newWidth;
+            this.resizeComponent.position.height = newHeight;
+            this.resizeComponent.updateElement(this.canvas);
+        }
+        
+        // Update preview placeholder
+        this.updatePreview(newCol, newRow, newWidth, newHeight);
+    }
+    
+    private handleSmoothDrag(e: MouseEvent): void {
+        if (!this.draggedComponent) return;
+        
+        const rawGridPos = this.getGridPosition(e.clientX - this.dragOffset.x, e.clientY - this.dragOffset.y);
+        const maxCol = 12 - this.draggedComponent.position.width;
+        const targetCol = Math.max(0, Math.min(maxCol, rawGridPos.x));
+        const targetRow = Math.max(0, rawGridPos.y);
+        
+        // Update raw cursor position immediately (for ghost outline)
+        this.rawCursorPosition = { x: targetCol, y: targetRow };
+        
+        // Update ghost element immediately
+        this.updateGhostElement();
+        
+        // Calculate magnetic snapping for the actual component
+        const currentCol = this.smoothDragPosition.x;
+        const currentRow = this.smoothDragPosition.y;
+        
+        // Check if we should snap to next grid position
+        const colDiff = targetCol - currentCol;
+        const rowDiff = targetRow - currentRow;
+        
+        if (Math.abs(colDiff) > this.snapThreshold) {
+            this.targetGridPosition.x = targetCol;
+        }
+        if (Math.abs(rowDiff) > this.snapThreshold) {
+            this.targetGridPosition.y = targetRow;
+        }
+        
+        // Update preview placeholder to show target snap position
+        this.updatePreview(this.targetGridPosition.x, this.targetGridPosition.y, 
+                          this.draggedComponent.position.width, this.draggedComponent.position.height);
+    }
+    
+    private handleSmoothResize(e: MouseEvent): void {
+        if (!this.resizeComponent || !this.resizeDirection) return;
+        
+        const deltaX = e.clientX - this.resizeStartPosition.x;
+        const deltaY = e.clientY - this.resizeStartPosition.y;
+        const cellSize = this.getCellSize();
+        
+        // Convert pixel deltas to grid deltas (floating point for smooth interpolation)
+        const gridDeltaX = deltaX / (cellSize.width + 8);
+        const gridDeltaY = deltaY / (cellSize.height + 8);
+        
+        const minWidth = this.getMinimumColumns(this.resizeComponent);
+        const minHeight = 1;
+        
+        // Calculate target dimensions and positions
+        let targetWidth = this.resizeStartSize.width;
+        let targetHeight = this.resizeStartSize.height;
+        let targetCol = this.resizeStartSize.col;
+        let targetRow = this.resizeStartSize.row;
+        
+        // Handle width changes and column position for west/east resizing
+        switch (this.resizeDirection) {
+            case 'east':
+            case 'southeast':
+            case 'northeast':
+                targetWidth = Math.max(minWidth, Math.min(12 - this.resizeStartSize.col, this.resizeStartSize.width + gridDeltaX));
+                break;
+            case 'west':
+            case 'southwest':
+            case 'northwest':
+                // For west resizing, we need to move the component and change its width
+                const newWidth = Math.max(minWidth, this.resizeStartSize.width - gridDeltaX);
+                const widthDelta = newWidth - this.resizeStartSize.width;
+                targetCol = Math.max(0, this.resizeStartSize.col - widthDelta);
+                targetWidth = newWidth;
+                
+                // Ensure we don't go beyond grid bounds
+                if (targetCol + targetWidth > 12) {
+                    targetWidth = 12 - targetCol;
+                }
+                break;
+        }
+        
+        // Handle height changes and row position for north/south resizing
+        switch (this.resizeDirection) {
+            case 'south':
+            case 'southeast':
+            case 'southwest':
+                targetHeight = Math.max(minHeight, this.resizeStartSize.height + gridDeltaY);
+                break;
+            case 'north':
+            case 'northeast':
+            case 'northwest':
+                // For north resizing, we need to move the component and change its height
+                const newHeight = Math.max(minHeight, this.resizeStartSize.height - gridDeltaY);
+                const heightDelta = newHeight - this.resizeStartSize.height;
+                targetRow = Math.max(0, this.resizeStartSize.row - heightDelta);
+                targetHeight = newHeight;
+                break;
+        }
+        
+        // Apply magnetic snapping
+        const widthDiff = targetWidth - this.smoothResizeSize.width;
+        const heightDiff = targetHeight - this.smoothResizeSize.height;
+        
+        if (Math.abs(widthDiff) > this.snapThreshold) {
+            this.targetResizeSize.width = Math.round(targetWidth);
+        }
+        if (Math.abs(heightDiff) > this.snapThreshold) {
+            this.targetResizeSize.height = Math.round(targetHeight);
+        }
+        
+        // Store raw resize data for immediate ghost feedback
+        this.rawResizeSize = { width: targetWidth, height: targetHeight };
+        this.rawResizePosition = { x: targetCol, y: targetRow };
+        
+        // Store target position for position-changing resize directions
+        this.targetResizePosition = { x: targetCol, y: targetRow };
+        
+        // Update ghost element immediately
+        this.updateResizeGhostElement();
+        
+        // Update preview with target size and position
+        this.updatePreview(this.targetResizePosition.x, this.targetResizePosition.y, this.targetResizeSize.width, this.targetResizeSize.height);
+    }
+    
+    private startSmoothAnimation(): void {
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+        }
+        
+        const animate = () => {
+            if (this.draggedComponent) {
+                this.updateSmoothDrag();
+            }
+            if (this.resizeComponent) {
+                this.updateSmoothResize();
+            }
+            
+            if (this.draggedComponent || this.resizeComponent) {
+                this.animationFrame = requestAnimationFrame(animate);
+            }
+        };
+        
+        this.animationFrame = requestAnimationFrame(animate);
+    }
+    
+    private updateSmoothDrag(): void {
+        if (!this.draggedComponent) return;
+        
+        // Interpolate toward target position with magnetic resistance
+        const targetX = this.targetGridPosition.x;
+        const targetY = this.targetGridPosition.y;
+        
+        this.smoothDragPosition.x += (targetX - this.smoothDragPosition.x) * this.magneticStrength;
+        this.smoothDragPosition.y += (targetY - this.smoothDragPosition.y) * this.magneticStrength;
+        
+        // Update visual position (smooth interpolation)
+        this.updateComponentSmoothPosition(this.draggedComponent, this.smoothDragPosition.x, this.smoothDragPosition.y);
+    }
+    
+    private updateSmoothResize(): void {
+        if (!this.resizeComponent) return;
+        
+        // Interpolate toward target size with magnetic resistance
+        this.smoothResizeSize.width += (this.targetResizeSize.width - this.smoothResizeSize.width) * this.magneticStrength;
+        this.smoothResizeSize.height += (this.targetResizeSize.height - this.smoothResizeSize.height) * this.magneticStrength;
+        
+        // Update visual size and position (smooth interpolation)
+        this.updateComponentSmoothSizeAndPosition(this.resizeComponent, 
+            this.targetResizePosition.x, this.targetResizePosition.y,
+            this.smoothResizeSize.width, this.smoothResizeSize.height);
+    }
+    
+    private updateComponentSmoothPosition(component: Component, smoothCol: number, smoothRow: number): void {
+        const cellSize = this.getCellSize();
+        const x = smoothCol * cellSize.width + (smoothCol * 8);
+        const y = smoothRow * cellSize.height + (smoothRow * 8);
+        const width = component.position.width * cellSize.width + (component.position.width - 1) * 8;
+        const height = component.position.height * cellSize.height + (component.position.height - 1) * 8;
+        
+        component.element.style.left = `${x + 15}px`;
+        component.element.style.top = `${y + 15}px`;
+        component.element.style.width = `${width}px`;
+        component.element.style.height = `${height}px`;
+    }
+    
+    private updateComponentSmoothSize(component: Component, smoothWidth: number, smoothHeight: number): void {
+        const cellSize = this.getCellSize();
+        const x = component.position.col * cellSize.width + (component.position.col * 8);
+        const y = component.position.row * cellSize.height + (component.position.row * 8);
+        const width = smoothWidth * cellSize.width + (smoothWidth - 1) * 8;
+        const height = smoothHeight * cellSize.height + (smoothHeight - 1) * 8;
+        
+        component.element.style.left = `${x + 15}px`;
+        component.element.style.top = `${y + 15}px`;
+        component.element.style.width = `${width}px`;
+        component.element.style.height = `${height}px`;
+    }
+    
+    private updateComponentSmoothSizeAndPosition(component: Component, smoothCol: number, smoothRow: number, smoothWidth: number, smoothHeight: number): void {
+        const cellSize = this.getCellSize();
+        const x = smoothCol * cellSize.width + (smoothCol * 8);
+        const y = smoothRow * cellSize.height + (smoothRow * 8);
+        const width = smoothWidth * cellSize.width + (smoothWidth - 1) * 8;
+        const height = smoothHeight * cellSize.height + (smoothHeight - 1) * 8;
+        
+        component.element.style.left = `${x + 15}px`;
+        component.element.style.top = `${y + 15}px`;
+        component.element.style.width = `${width}px`;
+        component.element.style.height = `${height}px`;
+    }
+    
+    private stopSmoothAnimation(): void {
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+        }
+    }
+    
+    private updateGhostElement(): void {
+        if (!this.ghostElement || !this.draggedComponent) return;
+        
+        // Apply magnetic stickiness to ghost position
+        const magneticPos = this.applyMagneticStickiness(
+            this.rawCursorPosition.x, 
+            this.rawCursorPosition.y
+        );
+        
+        // Check for collisions at ghost position
+        const hasCollision = this.checkGhostCollision(
+            magneticPos.x, 
+            magneticPos.y, 
+            this.draggedComponent.position.width, 
+            this.draggedComponent.position.height,
+            this.draggedComponent
+        );
+        
+        // Show ghost at magnetic position for immediate feedback with stickiness
+        const cellSize = this.getCellSize();
+        const ghostX = magneticPos.x * cellSize.width + (magneticPos.x * 8);
+        const ghostY = magneticPos.y * cellSize.height + (magneticPos.y * 8);
+        const ghostWidth = this.draggedComponent.position.width * cellSize.width + (this.draggedComponent.position.width - 1) * 8;
+        const ghostHeight = this.draggedComponent.position.height * cellSize.height + (this.draggedComponent.position.height - 1) * 8;
+        
+        // Always show ghost outline at good visibility
+        const opacity = 0.8;
+        
+        // Update collision state
+        if (hasCollision) {
+            this.ghostElement.classList.add('collision');
+        } else {
+            this.ghostElement.classList.remove('collision');
+        }
+        
+        this.ghostElement.style.left = `${ghostX + 15}px`;
+        this.ghostElement.style.top = `${ghostY + 15}px`;
+        this.ghostElement.style.width = `${ghostWidth}px`;
+        this.ghostElement.style.height = `${ghostHeight}px`;
+        this.ghostElement.style.opacity = opacity.toString();
+    }
+    
+    private updateResizeGhostElement(): void {
+        if (!this.ghostElement || !this.resizeComponent) return;
+        
+        // Apply magnetic stickiness to ghost position and size
+        const magneticPos = this.applyMagneticStickiness(
+            this.rawResizePosition.x, 
+            this.rawResizePosition.y
+        );
+        const magneticWidth = this.applyMagneticStickinessToSize(this.rawResizeSize.width);
+        const magneticHeight = this.applyMagneticStickinessToSize(this.rawResizeSize.height);
+        
+        // Check for collisions at ghost position/size
+        const hasCollision = this.checkGhostCollision(
+            magneticPos.x, 
+            magneticPos.y, 
+            magneticWidth, 
+            magneticHeight,
+            this.resizeComponent
+        );
+        
+        // Show ghost at magnetic position/size for immediate feedback with stickiness
+        const cellSize = this.getCellSize();
+        const ghostX = magneticPos.x * cellSize.width + (magneticPos.x * 8);
+        const ghostY = magneticPos.y * cellSize.height + (magneticPos.y * 8);
+        const ghostWidth = Math.max(cellSize.width, magneticWidth * cellSize.width + (magneticWidth - 1) * 8);
+        const ghostHeight = Math.max(cellSize.height, magneticHeight * cellSize.height + (magneticHeight - 1) * 8);
+        
+        // Always show ghost outline at good visibility, especially when resizing
+        const opacity = 0.9;
+        
+        // Update collision state
+        if (hasCollision) {
+            this.ghostElement.classList.add('collision');
+        } else {
+            this.ghostElement.classList.remove('collision');
+        }
+        
+        this.ghostElement.style.left = `${ghostX + 15}px`;
+        this.ghostElement.style.top = `${ghostY + 15}px`;
+        this.ghostElement.style.width = `${ghostWidth}px`;
+        this.ghostElement.style.height = `${ghostHeight}px`;
+        this.ghostElement.style.opacity = opacity.toString();
+    }
+    
+    private applyMagneticStickiness(rawX: number, rawY: number): Position {
+        // Apply magnetic stickiness to position - snap to nearest grid when close
+        const roundedX = Math.round(rawX);
+        const roundedY = Math.round(rawY);
+        
+        const distanceX = Math.abs(rawX - roundedX);
+        const distanceY = Math.abs(rawY - roundedY);
+        
+        const magneticX = distanceX < this.magneticGhostThreshold ? roundedX : rawX;
+        const magneticY = distanceY < this.magneticGhostThreshold ? roundedY : rawY;
+        
+        return { x: magneticX, y: magneticY };
+    }
+    
+    private applyMagneticStickinessToSize(rawSize: number): number {
+        // Apply magnetic stickiness to size - snap to nearest integer when close
+        const rounded = Math.round(rawSize);
+        const distance = Math.abs(rawSize - rounded);
+        
+        return distance < this.magneticGhostThreshold ? rounded : rawSize;
+    }
+    
+    private checkGhostCollision(col: number, row: number, width: number, height: number, excludeComponent: Component): boolean {
+        // Check if ghost position would overlap with any other components
+        if (col < 0 || col + width > 12 || row < 0) {
+            return true; // Out of bounds
+        }
+        
+        for (const comp of this.components) {
+            if (comp === excludeComponent) continue;
+            
+            if (this.rectanglesOverlap(
+                col, row, width, height,
+                comp.position.col, comp.position.row, comp.position.width, comp.position.height
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     private cleanupPreview(): void {
         if (this.previewElement) {
             this.previewElement.remove();
             this.previewElement = null;
         }
+        if (this.ghostElement) {
+            this.ghostElement.remove();
+            this.ghostElement = null;
+        }
+        this.stopSmoothAnimation();
     }
     
     private saveMasterLayout(): void {
@@ -633,6 +1119,65 @@ export class LayoutEngine {
     
     getMasterLayout(): ComponentState[] {
         return [...this.masterLayout];
+    }
+    
+    private applyFinalResize(component: Component): void {
+        if (!this.resizeDirection) return;
+        
+        const finalWidth = Math.round(this.targetResizeSize.width);
+        const finalHeight = Math.round(this.targetResizeSize.height);
+        
+        let finalCol = component.position.col;
+        let finalRow = component.position.row;
+        
+        // Calculate final position for directions that move the component
+        switch (this.resizeDirection) {
+            case 'west':
+            case 'northwest':
+            case 'southwest':
+                finalCol = this.resizeStartSize.col + (this.resizeStartSize.width - finalWidth);
+                break;
+            case 'north':
+            case 'northeast':
+            case 'northwest':
+                finalRow = this.resizeStartSize.row + (this.resizeStartSize.height - finalHeight);
+                break;
+        }
+        
+        // Apply final position and size
+        component.position.col = Math.max(0, finalCol);
+        component.position.row = Math.max(0, finalRow);
+        component.position.width = finalWidth;
+        component.position.height = finalHeight;
+        
+        // Ensure component doesn't go out of bounds
+        if (component.position.col + component.position.width > 12) {
+            component.position.width = 12 - component.position.col;
+        }
+    }
+    
+    private deleteComponent(component: Component): void {
+        // Remove component from array
+        const index = this.components.indexOf(component);
+        if (index > -1) {
+            this.components.splice(index, 1);
+        }
+        
+        // Remove DOM element
+        component.element.remove();
+        
+        // Update border handles
+        this.updateBorderHandles();
+        
+        // Reflow remaining components if enabled
+        if (this.reflowEnabled) {
+            this.reflowComponents();
+        }
+        
+        // Save master layout if on desktop
+        if (this.currentBreakpoint === 'desktop') {
+            this.saveMasterLayout();
+        }
     }
     
     private updateBorderHandles(): void {

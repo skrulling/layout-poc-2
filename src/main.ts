@@ -158,7 +158,7 @@ document.getElementById('import-confirm-btn')!.addEventListener('click', () => {
     }, 2000);
     
   } catch (error) {
-    importError.textContent = `Error: ${error.message}`;
+    importError.textContent = `Error: ${(error as Error).message}`;
     importError.classList.add('show');
   }
 });

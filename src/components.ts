@@ -46,8 +46,16 @@ export class ChartComponent extends Component {
         const element = document.createElement('div');
         element.className = 'component component-chart';
         element.innerHTML = `
-            <div>Chart ${this.id}</div>
-            <div class="resize-handle"></div>
+            <div class="component-content">Chart ${this.id}</div>
+            <div class="delete-button" data-component-id="${this.id}">&times;</div>
+            <div class="resize-handle north" data-direction="north"></div>
+            <div class="resize-handle south" data-direction="south"></div>
+            <div class="resize-handle east" data-direction="east"></div>
+            <div class="resize-handle west" data-direction="west"></div>
+            <div class="resize-handle northeast" data-direction="northeast"></div>
+            <div class="resize-handle northwest" data-direction="northwest"></div>
+            <div class="resize-handle southeast" data-direction="southeast"></div>
+            <div class="resize-handle southwest" data-direction="southwest"></div>
         `;
         return element;
     }
@@ -62,8 +70,16 @@ export class KPIComponent extends Component {
         const element = document.createElement('div');
         element.className = 'component component-kpi';
         element.innerHTML = `
-            <div>KPI ${this.id}</div>
-            <div class="resize-handle"></div>
+            <div class="component-content">KPI ${this.id}</div>
+            <div class="delete-button" data-component-id="${this.id}">&times;</div>
+            <div class="resize-handle north" data-direction="north"></div>
+            <div class="resize-handle south" data-direction="south"></div>
+            <div class="resize-handle east" data-direction="east"></div>
+            <div class="resize-handle west" data-direction="west"></div>
+            <div class="resize-handle northeast" data-direction="northeast"></div>
+            <div class="resize-handle northwest" data-direction="northwest"></div>
+            <div class="resize-handle southeast" data-direction="southeast"></div>
+            <div class="resize-handle southwest" data-direction="southwest"></div>
         `;
         return element;
     }

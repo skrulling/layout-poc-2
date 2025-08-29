@@ -99,15 +99,79 @@ body {
     transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease;
 }
 
+.component:hover .resize-handle {
+    opacity: 0.4;
+}
+
+.component:hover .resize-handle:hover {
+    opacity: 1;
+}
+
+.component.resizing .resize-handle {
+    opacity: 0.2;
+}
+
+.component.resizing .resize-handle.active {
+    opacity: 1;
+}
+
+.component-content {
+    pointer-events: none;
+    z-index: 1;
+}
+
+.delete-button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 25;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    line-height: 1;
+}
+
+.component:hover .delete-button {
+    opacity: 0.8;
+    transform: scale(1);
+}
+
+.delete-button:hover {
+    opacity: 1 !important;
+    background-color: #c82333;
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(220, 53, 69, 0.3);
+}
+
+.delete-button:active {
+    transform: scale(0.95);
+}
+
 .component.dragging {
-    opacity: 0.7;
+    opacity: 0.8;
     z-index: 100;
     transition: none;
+    box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
+    transform: scale(1.02);
 }
 
 .component.resizing {
     cursor: nw-resize;
     transition: none;
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.25);
+    transform: scale(1.01);
 }
 
 .component-chart {
@@ -122,21 +186,154 @@ body {
 
 .resize-handle {
     position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
     background-color: #007bff;
-    cursor: nw-resize;
+    opacity: 0;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
     z-index: 20;
+    border-radius: 2px;
+}
+
+.resize-handle:hover {
+    opacity: 1 !important;
+    background-color: #0056b3;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.resize-handle.active {
+    opacity: 1;
+    background-color: #28a745;
+}
+
+/* North handle */
+.resize-handle.north {
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 8px;
+    cursor: n-resize;
+    border-radius: 0 0 4px 4px;
+}
+
+/* South handle */
+.resize-handle.south {
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 8px;
+    cursor: s-resize;
+    border-radius: 4px 4px 0 0;
+}
+
+/* East handle */
+.resize-handle.east {
+    right: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 60px;
+    cursor: e-resize;
+    border-radius: 4px 0 0 4px;
+}
+
+/* West handle */
+.resize-handle.west {
+    left: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 60px;
+    cursor: w-resize;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Northeast handle */
+.resize-handle.northeast {
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: ne-resize;
+    border-radius: 0 4px 0 4px;
+}
+
+/* Northwest handle */
+.resize-handle.northwest {
+    top: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: nw-resize;
+    border-radius: 4px 0 4px 0;
+}
+
+/* Southeast handle */
+.resize-handle.southeast {
+    bottom: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Southwest handle */
+.resize-handle.southwest {
+    bottom: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: sw-resize;
+    border-radius: 4px 0 0 4px;
 }
 
 .preview-placeholder {
     position: absolute;
     border: 2px dashed #007bff;
-    background-color: rgba(0, 123, 255, 0.1);
+    background-color: rgba(0, 123, 255, 0.15);
     pointer-events: none;
     z-index: 5;
+    border-radius: 6px;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.2);
+    animation: pulse-preview 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-preview {
+    0%, 100% {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.15);
+    }
+    50% {
+        border-color: #0056b3;
+        background-color: rgba(0, 123, 255, 0.25);
+    }
+}
+
+.ghost-outline {
+    position: absolute;
+    border: 2px solid rgba(0, 123, 255, 0.8);
+    background-color: rgba(0, 123, 255, 0.15);
+    pointer-events: none;
+    z-index: 110;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    opacity: 0;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    border-style: dashed;
+}
+
+.ghost-outline.collision {
+    border-color: rgba(220, 53, 69, 0.9);
+    background-color: rgba(220, 53, 69, 0.2);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+    animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
 }
 
 .border-handle {
@@ -145,7 +342,7 @@ body {
     border: none;
     border-radius: 4px;
     z-index: 15;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     opacity: 0;
     transform: scale(0.8);
 }
@@ -153,9 +350,17 @@ body {
 .border-handle:hover {
     background: linear-gradient(135deg, #007bff 0%, #0056b3 50%, #004085 100%);
     border: 1px solid #004085;
-    opacity: 1;
-    box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
+    opacity: 0.9;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
     transform: scale(1.0);
+}
+
+.canvas:hover .border-handle {
+    opacity: 0.3;
+}
+
+.canvas:hover .border-handle:hover {
+    opacity: 0.9;
 }
 
 .border-handle.vertical {
