@@ -15,13 +15,18 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
       
       <div class="task-navigator">
-        <h3>Task Challenge</h3>
-        <div class="task-controls">
-          <button id="task-prev" class="task-arrow" disabled>‹</button>
-          <div class="task-info">
-            <span id="task-counter">1 / 2</span>
+        <div class="task-left">
+          <h3>Task Challenge</h3>
+          <div class="task-instruction">
+            <span id="task-text">Create the displayed layout</span>
           </div>
-          <button id="task-next" class="task-arrow">›</button>
+          <div class="task-controls">
+            <button id="task-prev" class="task-arrow" disabled>‹</button>
+            <div class="task-info">
+              <span id="task-counter">1 / 2</span>
+            </div>
+            <button id="task-next" class="task-arrow">›</button>
+          </div>
         </div>
         <div class="task-image-container">
           <img id="task-image" src="/dash-1.png" alt="Task Layout" />
