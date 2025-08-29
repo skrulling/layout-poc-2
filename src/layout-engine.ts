@@ -1121,6 +1121,29 @@ export class LayoutEngine {
         return [...this.masterLayout];
     }
     
+    clearCanvas(): void {
+        // Remove all components
+        this.components.forEach(component => {
+            component.element.remove();
+        });
+        this.components = [];
+        
+        // Clear border handles
+        this.borderHandles.forEach(handle => handle.remove());
+        this.borderHandles = [];
+        
+        // Clear master layout
+        this.masterLayout = [];
+        
+        // Reset ID counter
+        this.nextId = 1;
+        
+        // Clean up any active interactions
+        this.cleanupPreview();
+        this.draggedComponent = null;
+        this.resizeComponent = null;
+    }
+    
     private applyFinalResize(component: Component): void {
         if (!this.resizeDirection) return;
         
