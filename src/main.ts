@@ -53,7 +53,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <div class="canvas-controls" id="canvas-controls-3">
           <!-- Controls for demo3 will be inserted here dynamically -->
         </div>
-        <div id="canvas-3" class="canvas template-canvas"></div>
+        <div id="canvas-3" class="canvas template-canvas">
+          <div id="container"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -155,16 +157,9 @@ function updateCanvasControls(demoId: string) {
     `;
   } else if (demoId === 'demo3') {
     canvasControls.innerHTML = `
-      <div class="template-controls">
-        <label>Template:</label>
-        <select id="template-select">
-          <option value="dashboard">Dashboard</option>
-          <option value="analytics">Analytics</option>
-          <option value="report">Report</option>
-          <option value="kpi-grid">KPI Grid</option>
-        </select>
+      <div class="dashboard-info">
+        <p>Highsoft Dashboards Demo - Interactive dashboard with drag & drop layout editing</p>
       </div>
-      <button id="clear-template-btn" class="btn btn-warning">Clear Canvas</button>
     `;
   }
   
@@ -233,30 +228,8 @@ function attachDemoEventListeners(demoId: string) {
       layoutEngines['demo2'].importLayout(savedState);
     }
   } else if (demoId === 'demo3') {
-    const templateSelect = document.getElementById('template-select') as HTMLSelectElement;
-    templateSelect?.addEventListener('change', () => {
-      demo3Controller.createTemplate(templateSelect.value);
-    });
-    document.getElementById('clear-template-btn')?.addEventListener('click', () => {
-      if (confirm('Are you sure you want to clear the canvas?')) {
-        demo3Controller.clearTemplate();
-        templateSelect.value = 'dashboard';
-        clearLayoutState('demo3');
-        demo3Controller.createTemplate('dashboard');
-      }
-    });
-    
-    // Initialize template
-    const savedState = loadLayoutState('demo3');
-    if (savedState && savedState.currentTemplate) {
-      templateSelect.value = savedState.currentTemplate;
-      demo3Controller.createTemplate(savedState.currentTemplate);
-      if (savedState.filledSlots) {
-        demo3Controller.restoreSlots(savedState.filledSlots);
-      }
-    } else {
-      demo3Controller.createTemplate('dashboard');
-    }
+    // Load and initialize dashboard
+    initializeDashboardDemo();
   }
 }
 
@@ -287,107 +260,25 @@ function importLayout(demoId: string) {
   importTextarea.focus();
 }
 
-// Demo3 controller
-const demo3Controller = {
-  currentTemplate: null as string | null,
-  templateSlots: [] as HTMLElement[],
-  
-  createTemplate(templateType: string) {
-    this.clearTemplate();
-    this.currentTemplate = templateType;
-    
-    const templates = {
-      dashboard: [
-        { col: 0, row: 0, width: 6, height: 6, label: 'Main Chart' },
-        { col: 6, row: 0, width: 6, height: 3, label: 'KPI 1' },
-        { col: 6, row: 3, width: 6, height: 3, label: 'KPI 2' }
-      ],
-      analytics: [
-        { col: 0, row: 0, width: 4, height: 6, label: 'Chart 1' },
-        { col: 4, row: 0, width: 4, height: 6, label: 'Chart 2' },
-        { col: 8, row: 0, width: 4, height: 6, label: 'Chart 3' }
-      ],
-      report: [
-        { col: 0, row: 0, width: 12, height: 2, label: 'Header' },
-        { col: 0, row: 2, width: 12, height: 8, label: 'Main Content' },
-        { col: 0, row: 10, width: 12, height: 2, label: 'Footer' }
-      ],
-      'kpi-grid': [
-        { col: 0, row: 0, width: 4, height: 3, label: 'KPI 1' },
-        { col: 4, row: 0, width: 4, height: 3, label: 'KPI 2' },
-        { col: 8, row: 0, width: 4, height: 3, label: 'KPI 3' },
-        { col: 0, row: 3, width: 4, height: 3, label: 'KPI 4' },
-        { col: 4, row: 3, width: 4, height: 3, label: 'KPI 5' },
-        { col: 8, row: 3, width: 4, height: 3, label: 'KPI 6' }
-      ]
-    };
-    
-    const canvas = document.getElementById('canvas-3')!;
-    const slots = templates[templateType as keyof typeof templates] || [];
-    
-    slots.forEach((slot, index) => {
-      const slotElement = document.createElement('div');
-      slotElement.className = 'template-slot';
-      slotElement.textContent = `+ ${slot.label}`;
-      slotElement.dataset.slotIndex = index.toString();
-      
-      const canvasRect = canvas.getBoundingClientRect();
-      const cellWidth = (canvasRect.width - 30 - (11 * 8)) / 12;
-      const cellHeight = 50;
-      
-      const x = slot.col * cellWidth + (slot.col * 8);
-      const y = slot.row * cellHeight + (slot.row * 8);
-      const width = slot.width * cellWidth + (slot.width - 1) * 8;
-      const height = slot.height * cellHeight + (slot.height - 1) * 8;
-      
-      slotElement.style.left = `${x + 15}px`;
-      slotElement.style.top = `${y + 15}px`;
-      slotElement.style.width = `${width}px`;
-      slotElement.style.height = `${height}px`;
-      
-      slotElement.addEventListener('click', () => {
-        if (!slotElement.classList.contains('filled')) {
-          slotElement.textContent = slot.label;
-          slotElement.classList.add('filled');
-        } else {
-          slotElement.textContent = `+ ${slot.label}`;
-          slotElement.classList.remove('filled');
-        }
-        this.saveState();
-      });
-      
-      canvas.appendChild(slotElement);
-      this.templateSlots.push(slotElement);
-    });
-    
-    this.saveState();
-  },
-  
-  clearTemplate() {
-    this.templateSlots.forEach(slot => slot.remove());
-    this.templateSlots = [];
-  },
-  
-  saveState() {
-    saveLayoutState('demo3', {
-      currentTemplate: this.currentTemplate,
-      filledSlots: this.templateSlots.map((slot, index) => ({
-        index,
-        filled: slot.classList.contains('filled'),
-        label: slot.textContent
-      }))
-    });
-  },
-  
-  restoreSlots(filledSlots: any[]) {
-    filledSlots.forEach((slotData: any) => {
-      if (slotData.filled && this.templateSlots[slotData.index]) {
-        this.templateSlots[slotData.index].classList.add('filled');
-        this.templateSlots[slotData.index].textContent = slotData.label;
-      }
-    });
+// Dashboard initialization function
+function initializeDashboardDemo() {
+  // Check if dash.js is already loaded
+  if ((window as any).initializeDashboard) {
+    (window as any).initializeDashboard();
+    return;
   }
-};
+  
+  // Load dash.js script
+  const script = document.createElement('script');
+  script.src = '/src/dash.js';
+  script.onload = () => {
+    // Call the initialization function once the script is loaded
+    if ((window as any).initializeDashboard) {
+      (window as any).initializeDashboard();
+    }
+  };
+  document.head.appendChild(script);
+}
 
 // Initialize layout engines only (without event listeners)
 layoutEngines['demo1'] = new LayoutEngine('canvas-1');
