@@ -8,9 +8,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div class="sidebar">
         <h1>Layout Engine</h1>
         <div class="demo-tabs">
-          <button class="tab-button active" data-demo="demo1">Demo 1: Advanced (Reflow)</button>
-          <button class="tab-button" data-demo="demo2">Demo 2: Advanced (No Reflow)</button>
-          <button class="tab-button" data-demo="demo3">Demo 3: Dashboard</button>
+          <button class="tab-button active" data-demo="demo1">Demo 1</button>
+          <button class="tab-button" data-demo="demo2">Demo 2</button>
+          <button class="tab-button" data-demo="demo3">Demo 3</button>
         </div>
       </div>
       
