@@ -279,7 +279,7 @@ function initializeDashboardDemo() {
   
   // Load dash.js script
   const script = document.createElement('script');
-  script.src = '/src/dash.js';
+  script.src = '/dash.js';
   script.onload = () => {
     // Call the initialization function once the script is loaded
     if ((window as any).initializeDashboard) {
