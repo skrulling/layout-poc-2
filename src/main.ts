@@ -10,13 +10,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <div class="demo-tabs">
           <button class="tab-button active" data-demo="demo1">Demo 1: Advanced (Reflow)</button>
           <button class="tab-button" data-demo="demo2">Demo 2: Advanced (No Reflow)</button>
-          <button class="tab-button" data-demo="demo3">Demo 3: Simple Templates</button>
+          <button class="tab-button" data-demo="demo3">Demo 3: Dashboard</button>
         </div>
       </div>
       
       <div class="task-navigator">
         <div class="task-left">
-          <h3>Task Challenge</h3>
+          <h3>Challenge</h3>
           <div class="task-instruction">
             <span id="task-text">Create the displayed layout</span>
           </div>
@@ -29,7 +29,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           </div>
         </div>
         <div class="task-image-container">
-          <img id="task-image" src="/dash-1.png" alt="Task Layout" />
+          <div id="single-image-display" class="single-image-display">
+            <img id="task-image" src="/dash-1.png" alt="Task Layout" />
+          </div>
+          <div id="dual-image-display" class="dual-image-display" style="display: none;">
+            <img id="task-image-1" src="/dash-3.png" alt="First Task Layout" />
+            <div class="arrow-container">
+              <span class="arrow">→</span>
+            </div>
+            <img id="task-image-2" src="/dash-1.png" alt="Target Task Layout" />
+          </div>
         </div>
       </div>
     </div>
@@ -322,20 +331,38 @@ document.querySelectorAll('.tab-button').forEach(btn => {
 });
 
 // Task navigation functionality
-const taskImages = ['/dash-1.png', '/dash-2.png'];
+const taskImages = ['/dash-1.png', '/dash-2.png', '/dash-3.png'];
+const taskTexts = [
+  'Create the displayed layout',
+  'Create the displayed layout', 
+  'First create the first layout, then adjust it to match the second'
+];
 let currentTaskIndex = 0;
 
 function updateTaskDisplay() {
   const taskImage = document.getElementById('task-image') as HTMLImageElement;
   const taskCounter = document.getElementById('task-counter')!;
+  const taskText = document.getElementById('task-text')!;
   const prevBtn = document.getElementById('task-prev') as HTMLButtonElement;
   const nextBtn = document.getElementById('task-next') as HTMLButtonElement;
+  const singleImageDisplay = document.getElementById('single-image-display')!;
+  const dualImageDisplay = document.getElementById('dual-image-display')!;
   
-  // Update image
-  taskImage.src = taskImages[currentTaskIndex];
+  // Update task text
+  taskText.textContent = taskTexts[currentTaskIndex];
   
   // Update counter
   taskCounter.textContent = `${currentTaskIndex + 1} / ${taskImages.length}`;
+  
+  // Show appropriate image display based on task
+  if (currentTaskIndex === 2) { // Task 3 (0-indexed) - show dual images
+    singleImageDisplay.style.display = 'none';
+    dualImageDisplay.style.display = 'flex';
+  } else { // Tasks 1 & 2 - show single image
+    singleImageDisplay.style.display = 'block';
+    dualImageDisplay.style.display = 'none';
+    taskImage.src = taskImages[currentTaskIndex];
+  }
   
   // Update button states
   prevBtn.disabled = currentTaskIndex === 0;

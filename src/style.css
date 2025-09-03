@@ -81,10 +81,14 @@ body {
     flex-direction: column;
     gap: 12px;
     justify-content: center;
+    flex: 0 0 50%;
+    max-width: 50%;
 }
 
 .task-instruction {
     margin: 8px 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .task-instruction span {
@@ -985,4 +989,57 @@ body {
 
 .highcharts-dashboards-cell:has(.kpi-div) {
     flex: 0 0 50%;
+}
+
+/* Dual Image Display for Multi-step Tasks */
+.dual-image-display {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    justify-content: center;
+}
+
+.dual-image-display img {
+    width: 140px;
+    max-width: 140px;
+    height: auto;
+    border-radius: 4px;
+    border: 2px solid #dee2e6;
+    flex-shrink: 1;
+}
+
+.arrow-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.arrow {
+    font-size: 28px;
+    font-weight: bold;
+    color: #007bff;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .dual-image-display {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .arrow {
+        transform: rotate(90deg);
+    }
+    
+    .dual-image-display img {
+        width: 140px;
+    }
 }
